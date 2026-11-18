@@ -101,6 +101,8 @@ struct Shell {
     context: WebContext,
     data_dir: PathBuf,
     fullscreen: HashMap<u32, bool>,
+    exit_code: i32,
+    cleaned: bool,
     #[cfg(feature = "selftest")]
     test: Option<selftest::Test>,
 }
@@ -205,6 +207,8 @@ pub fn run(app: App, ui: Ui) -> ! {
         context: WebContext::new(Some(data_dir.clone())),
         data_dir,
         fullscreen: HashMap::new(),
+        exit_code: 0,
+        cleaned: false,
         #[cfg(feature = "selftest")]
         test: selftest::Test::from_env(),
     };
@@ -234,10 +238,11 @@ pub fn run(app: App, ui: Ui) -> ! {
         }
         if shell.wins.is_empty() {
             shell.prints.clear();
-            *flow = ControlFlow::Exit;
-        }
-        if *flow == ControlFlow::Exit {
-            remove_data_dir(&shell.data_dir);
+            if !shell.cleaned {
+                shell.cleaned = true;
+                remove_data_dir(&shell.data_dir);
+            }
+            *flow = ControlFlow::ExitWithCode(shell.exit_code);
         }
     })
 }
@@ -247,10 +252,13 @@ impl Shell {
         let actions = match ev {
             UserEvent::Ipc { win, msg } => {
                 #[cfg(feature = "selftest")]
-                if let Some(t) = &self.test {
-                    if t.message(&msg) {
-                        return;
-                    }
+                if let Some(code) = self.test.as_ref().and_then(|t| t.message(&msg)) {
+                    // the test is over: close everything the ordinary way
+                    self.exit_code = code;
+                    self.prints.clear();
+                    self.wins.clear();
+                    self.ids.clear();
+                    return;
                 }
                 match &mut self.core {
                     Core::Folio(f) => f.message(&msg),
@@ -700,11 +708,12 @@ mod selftest {
         pub fn script(&self) -> String {
             self.script.clone()
         }
-        pub fn message(&self, msg: &str) -> bool {
-            let Ok(v) = serde_json::from_str::<Value>(msg) else { return false };
-            let Some(report) = v.get("__test") else { return false };
+        /// The exit code, if this was the test's report.
+        pub fn message(&self, msg: &str) -> Option<i32> {
+            let v = serde_json::from_str::<Value>(msg).ok()?;
+            let report = v.get("__test")?;
             let _ = std::fs::write(&self.out, report.to_string());
-            std::process::exit(if report.get("ok").and_then(Value::as_bool) == Some(true) { 0 } else { 1 });
+            Some(if report.get("ok").and_then(Value::as_bool) == Some(true) { 0 } else { 1 })
         }
         pub fn answer_open(&self) -> Value {
             match std::env::var("APPSHELL_TEST_OPEN") {
