@@ -89,6 +89,7 @@ abstract class ShellActivity : ComponentActivity() {
         const val EXTRA_TEST_SCRIPT = "app.appshell.test.script"
         const val EXTRA_TEST_SAVE = "app.appshell.test.save"
         const val EXTRA_TEST_ASK = "app.appshell.test.ask"
+        const val EXTRA_TEST_SHOT = "app.appshell.test.shot"
         private const val TAG = "appshell"
 
         @Volatile var testReport: String? = null
@@ -320,9 +321,12 @@ abstract class ShellActivity : ComponentActivity() {
 
     private fun onString(s: String) {
         if (test != null && s.startsWith("{\"__test\"")) {
-            testReport = JSONObject(s).getJSONObject("__test").toString()
-            testLatch.countDown()
-            closeNow()
+            val report = JSONObject(s).getJSONObject("__test").toString()
+            screenshot(intent.getStringExtra(EXTRA_TEST_SHOT)) {
+                testReport = report
+                testLatch.countDown()
+                closeNow()
+            }
             return
         }
         if (s.startsWith("{\"put\":")) {
@@ -334,6 +338,21 @@ abstract class ShellActivity : ComponentActivity() {
             return
         }
         perform(Native.call(core, msg("op" to "message", "win" to win, "msg" to s)))
+    }
+
+    /** Test builds: a picture of the window as the test left it, in files/screens/. */
+    private fun screenshot(name: String?, then: () -> Unit) {
+        if (name == null || root.width == 0 || root.height == 0) return then()
+        val bmp = android.graphics.Bitmap.createBitmap(root.width, root.height, android.graphics.Bitmap.Config.ARGB_8888)
+        val at = IntArray(2).also { root.getLocationInWindow(it) }
+        val rect = android.graphics.Rect(at[0], at[1], at[0] + root.width, at[1] + root.height)
+        android.view.PixelCopy.request(window, rect, bmp, { code ->
+            if (code == android.view.PixelCopy.SUCCESS) {
+                val dir = File(filesDir, "screens").apply { mkdirs() }
+                FileOutputStream(File(dir, "$name.png")).use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            }
+            then()
+        }, android.os.Handler(mainLooper))
     }
 
     private fun onBuffer(data: ByteArray) {

@@ -164,11 +164,15 @@ jobs:
           target: default
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
-          script: gradle -p android --no-daemon connectedDebugAndroidTest
+          script: |
+            gradle -p android --no-daemon connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true
+            mkdir -p dist/screens
+            for p in app.folio:folio app.leaflet:leaflet-doc app.leaflet:leaflet-pdf; do adb exec-out run-as "${p%%:*}" cat "files/screens/${p#*:}.png" > "dist/screens/${p#*:}.png" || true; done
       - name: Package
         if: always()
         run: |
           mkdir -p dist
+          ls -la dist/screens || true
           cp android/folio/build/outputs/apk/release/*.apk dist/folio.apk 2>/dev/null || true
           cp android/leaflet/build/outputs/apk/release/*.apk dist/leaflet.apk 2>/dev/null || true
       - uses: actions/upload-artifact@v4

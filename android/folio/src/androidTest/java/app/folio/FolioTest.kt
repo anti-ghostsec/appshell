@@ -32,6 +32,7 @@ class FolioTest {
             Intent(Intent.ACTION_VIEW, Uri.fromFile(file)).setClassName(ctx, "app.folio.FolioActivity")
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 .putExtra(ShellActivity.EXTRA_TEST_SCRIPT, script("folio.js"))
+                .putExtra(ShellActivity.EXTRA_TEST_SHOT, "folio")
         )
         assertTrue("no report from the page", ShellActivity.testLatch.await(180, TimeUnit.SECONDS))
         val report = JSONObject(ShellActivity.testReport!!)

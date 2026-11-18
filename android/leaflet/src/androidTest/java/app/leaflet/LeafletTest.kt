@@ -35,6 +35,7 @@ class LeafletTest {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NEW_DOCUMENT or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
                 .putExtra(ShellActivity.EXTRA_TEST_SCRIPT, script("$test.js"))
                 .putExtra(ShellActivity.EXTRA_TEST_SAVE, out.path)
+                .putExtra(ShellActivity.EXTRA_TEST_SHOT, test)
         )
         assertTrue("no report from the page", ShellActivity.testLatch.await(240, TimeUnit.SECONDS))
         val report = JSONObject(ShellActivity.testReport!!)
