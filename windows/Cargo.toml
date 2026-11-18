@@ -1,0 +1,38 @@
+[package]
+name = "appshell-windows"
+description = "Folio and Leaflet on Windows: the interface in WebView2, locked down"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+build = "build.rs"
+
+[features]
+# Only for the CI's test build: lets a script drive the page and answer dialogs.
+selftest = []
+
+[target.'cfg(windows)'.dependencies]
+appshell-core = { path = "../core" }
+serde_json = "1"
+wry = { version = "0.57", default-features = false, features = ["os-webview"] }
+tao = { version = "0.37", default-features = false, features = ["rwh_06"] }
+rfd = { version = "0.18", default-features = false, features = ["common-controls-v6"] }
+webview2-com = "0.39"
+windows = { version = "0.62", features = [
+  "Win32_Foundation",
+  "Win32_Storage_FileSystem",
+  "Win32_System_Registry",
+  "Win32_UI_Shell",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+[target.'cfg(windows)'.build-dependencies]
+embed-manifest = "1.4"
+
+[[bin]]
+name = "folio"
+path = "src/bin/folio.rs"
+
+[[bin]]
+name = "leaflet"
+path = "src/bin/leaflet.rs"

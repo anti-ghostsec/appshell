@@ -22,3 +22,77 @@ jobs:
         run: cargo test -p leaflet-formats -p appshell-core --locked
         env:
           ORACLE_DIR: ${{ github.workspace }}/build/oracle
+
+  windows:
+    name: Windows (build, then Folio and Leaflet doing their jobs)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      APPSHELL_FOLIO_UI: ${{ github.workspace }}/build/folio/ui
+      APPSHELL_LEAFLET_UI: ${{ github.workspace }}/build/leaflet/ui
+    steps:
+      - uses: actions/checkout@v4
+      - name: The apps at the pinned commits
+        run: |
+          for app in folio leaflet; do
+            git clone -q https://github.com/anti-ghostsec/$app build/$app
+            git -C build/$app checkout -q "$(tr -d ' \n' < apps/$app.commit)"
+          done
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            target
+          key: windows-${{ hashFiles('Cargo.lock') }}
+      - name: Test build
+        run: cargo build --release -p appshell-windows --features selftest --locked
+      - name: Test files
+        run: |
+          mkdir -p build/t/out
+          printf 'hello from the test\n' > build/t/sample.txt
+          python build/leaflet/tests/fixtures.py build/t > /dev/null
+      - name: Folio opens a file and saves an edit
+        run: |
+          export APPSHELL_TEST_SCRIPT="$PWD/tools/selftest/folio.js" APPSHELL_TEST_OUT="$PWD/build/t/folio.json"
+          timeout 180 target/release/folio.exe "$(cygpath -w build/t/sample.txt)" || { cat build/t/folio.json; exit 1; }
+          cat build/t/folio.json; echo
+          grep -q 'edited by the test' build/t/sample.txt
+      - name: Leaflet edits and saves a .docx, and exports it as a PDF
+        run: |
+          export APPSHELL_TEST_SCRIPT="$PWD/tools/selftest/leaflet-doc.js" APPSHELL_TEST_OUT="$PWD/build/t/doc.json"
+          export APPSHELL_TEST_SAVE="$(cygpath -w build/t/out)"
+          timeout 240 target/release/leaflet.exe "$(cygpath -w build/t/sample.docx)" || { cat build/t/doc.json; exit 1; }
+          cat build/t/doc.json; echo
+          python -c "
+          import sys; sys.path.insert(0, 'build/leaflet'); import leaflet_formats as lf
+          d = lf.load(open('build/t/sample.docx', 'rb').read(), 'docx')
+          assert 'Edited by the test.' in lf.to_html(d), 'the edit is not in the saved file'
+          pdf = open('build/t/out/sample.pdf', 'rb').read()
+          assert pdf.startswith(b'%PDF'), 'the export is not a PDF'
+          print('docx saved; exported PDF', len(pdf), 'bytes')
+          "
+      - name: Leaflet shows a PDF, turns a page and saves it as a new file
+        run: |
+          export APPSHELL_TEST_SCRIPT="$PWD/tools/selftest/leaflet-pdf.js" APPSHELL_TEST_OUT="$PWD/build/t/pdf.json"
+          export APPSHELL_TEST_SAVE="$(cygpath -w build/t/out)"
+          timeout 240 target/release/leaflet.exe "$(cygpath -w build/t/pages.pdf)" || { cat build/t/pdf.json; exit 1; }
+          cat build/t/pdf.json; echo
+          head -c 5 build/t/out/pages.pdf | grep -q '%PDF'
+          ! cmp -s build/t/pages.pdf build/t/out/pages.pdf
+      - name: No profile left behind
+        run: |
+          left=$(ls -d "$TEMP"/folio-webview-* "$TEMP"/leaflet-webview-* 2>/dev/null || true)
+          if [ -n "$left" ]; then echo "left behind: $left"; exit 1; fi
+      - name: Release build
+        run: cargo build --release -p appshell-windows --locked
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp target/release/folio.exe target/release/leaflet.exe dist/
+          cp LICENSE dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/
