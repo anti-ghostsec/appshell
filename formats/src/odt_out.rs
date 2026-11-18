@@ -29,7 +29,7 @@ style:font-weight-asian=\"bold\" style:font-weight-complex=\"bold\"/></style:sty
         .collect();
     let ns = odt_ns();
     format!(
-        r#"<?xml version="1.0" encoding="UTF-8"?>
+        r##"<?xml version="1.0" encoding="UTF-8"?>
 <office:document-styles {ns} office:version="1.3">
 <office:font-face-decls><style:font-face style:name="Liberation Sans" svg:font-family="&apos;Liberation Sans&apos;" style:font-family-generic="swiss"/></office:font-face-decls>
 <office:styles>
@@ -48,7 +48,7 @@ style:font-weight-asian=\"bold\" style:font-weight-complex=\"bold\"/></style:sty
 <office:automatic-styles><style:page-layout style:name="pm1"><style:page-layout-properties fo:page-width="21.001cm" fo:page-height="29.7cm"
  style:print-orientation="portrait" fo:margin-top="2cm" fo:margin-bottom="2cm" fo:margin-left="2.5cm" fo:margin-right="2.5cm"/></style:page-layout></office:automatic-styles>
 <office:master-styles><style:master-page style:name="Standard" style:page-layout-name="pm1"/></office:master-styles>
-</office:document-styles>"#
+</office:document-styles>"##
     )
 }
 

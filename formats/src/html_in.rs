@@ -51,34 +51,41 @@ fn is_heading(tag: &str) -> bool {
 
 // ------------------------------------------------------------ entities
 
+/// html.unescape(): the same references, the same longest-prefix rule for
+/// names written without their semicolon, the same numeric fix-ups.
 fn decode_entities(s: &str) -> String {
     if !s.contains('&') {
         return s.to_string();
     }
     let mut out = String::with_capacity(s.len());
-    let b = s.as_bytes();
-    let mut i = 0;
-    while i < b.len() {
-        if b[i] != b'&' {
-            let next = s[i..].find('&').map_or(s.len(), |p| i + p);
-            out.push_str(&s[i..next]);
-            i = next;
-            continue;
-        }
-        if let Some((c, len)) = entity_at(&s[i..]) {
-            out.push_str(&c);
-            i += len;
-        } else {
-            out.push('&');
-            i += 1;
+    let mut rest = s;
+    while let Some(p) = rest.find('&') {
+        out.push_str(&rest[..p]);
+        rest = &rest[p..];
+        match charref(&rest[1..]) {
+            Some((text, used)) => {
+                out.push_str(&text);
+                rest = &rest[1 + used..];
+            }
+            None => {
+                out.push('&');
+                rest = &rest[1..];
+            }
         }
     }
+    out.push_str(rest);
     out
 }
 
-fn entity_at(s: &str) -> Option<(String, usize)> {
-    let rest = &s[1..];
-    if let Some(num) = rest.strip_prefix('#') {
+fn lookup(name: &str) -> Option<&'static str> {
+    use crate::entities::ENTITIES;
+    ENTITIES.binary_search_by(|(k, _)| k.cmp(&name)).ok().map(|i| ENTITIES[i].1)
+}
+
+/// What follows an '&': (replacement, bytes used), or None if it isn't a reference.
+fn charref(s: &str) -> Option<(String, usize)> {
+    use crate::entities::{INVALID_CHARREFS, INVALID_CODEPOINTS};
+    if let Some(num) = s.strip_prefix('#') {
         let (hex, digits) = match num.strip_prefix(['x', 'X']) {
             Some(h) => (true, h),
             None => (false, num),
@@ -87,56 +94,48 @@ fn entity_at(s: &str) -> Option<(String, usize)> {
         if len == 0 {
             return None;
         }
-        let v = u32::from_str_radix(&digits[..len], if hex { 16 } else { 10 }).unwrap_or(0x110000);
-        let c = match v {
-            0 => '\u{FFFD}',
-            0x80..=0x9F => crate::text::cp1252(&[v as u8]).chars().next().unwrap(),
-            _ => char::from_u32(v).unwrap_or('\u{FFFD}'),
-        };
-        let mut used = 1 + 1 + (hex as usize) + len;
-        if s.as_bytes().get(used) == Some(&b';') {
+        let mut used = 1 + hex as usize + len;
+        if digits.as_bytes().get(len) == Some(&b';') {
             used += 1;
         }
-        return Some((c.to_string(), used));
+        let v = u64::from_str_radix(&digits[..len.min(12)], if hex { 16 } else { 10 }).unwrap_or(u64::MAX);
+        let v = if len > 12 { u64::MAX } else { v };
+        if let Some((_, r)) = INVALID_CHARREFS.iter().find(|(k, _)| *k as u64 == v) {
+            return Some((r.to_string(), used));
+        }
+        if (0xD800..=0xDFFF).contains(&v) || v > 0x10FFFF {
+            return Some(("\u{FFFD}".to_string(), used));
+        }
+        if INVALID_CODEPOINTS.contains(&(v as u32)) {
+            return Some((String::new(), used));
+        }
+        return Some((char::from_u32(v as u32).unwrap_or('\u{FFFD}').to_string(), used));
     }
-    const NAMED: &[(&str, &str)] = &[
-        ("amp", "&"),
-        ("lt", "<"),
-        ("gt", ">"),
-        ("quot", "\""),
-        ("apos", "'"),
-        ("nbsp", "\u{a0}"),
-        ("shy", "\u{ad}"),
-        ("copy", "©"),
-        ("reg", "®"),
-        ("trade", "™"),
-        ("hellip", "…"),
-        ("mdash", "—"),
-        ("ndash", "–"),
-        ("lsquo", "‘"),
-        ("rsquo", "’"),
-        ("ldquo", "“"),
-        ("rdquo", "”"),
-        ("bull", "•"),
-        ("middot", "·"),
-        ("euro", "€"),
-        ("zwj", "\u{200d}"),
-        ("zwnj", "\u{200c}"),
-        ("lrm", "\u{200e}"),
-        ("rlm", "\u{200f}"),
-    ];
-    for (name, val) in NAMED {
-        if rest.starts_with(name) && rest.as_bytes().get(name.len()) == Some(&b';') {
-            return Some((val.to_string(), 1 + name.len() + 1));
+    // [^\t\n\f <&#;]{1,32};?
+    let mut end = 0;
+    for (n, (i, c)) in s.char_indices().enumerate() {
+        if n == 32 || matches!(c, '\t' | '\n' | '\u{c}' | ' ' | '<' | '&' | '#' | ';') {
+            break;
+        }
+        end = i + c.len_utf8();
+    }
+    if end == 0 {
+        return None;
+    }
+    let with_semi = s.as_bytes().get(end) == Some(&b';');
+    let name = &s[..if with_semi { end + 1 } else { end }];
+    if let Some(v) = lookup(name) {
+        return Some((v.to_string(), name.len()));
+    }
+    // the longest name that matches the start, then the rest as it was
+    let chars: Vec<(usize, char)> = name.char_indices().collect();
+    for x in (2..chars.len()).rev() {
+        let cut = chars[x].0;
+        if let Some(v) = lookup(&name[..cut]) {
+            return Some((format!("{v}{}", &name[cut..]), name.len()));
         }
     }
-    // the few that html.unescape also takes without a semicolon
-    for (name, val) in &NAMED[..6] {
-        if rest.starts_with(name) {
-            return Some((val.to_string(), 1 + name.len()));
-        }
-    }
-    None
+    None // html.unescape gives back '&' + name: the text stays as it was
 }
 
 // ------------------------------------------------------------ parsing

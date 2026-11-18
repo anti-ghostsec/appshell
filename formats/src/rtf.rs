@@ -139,6 +139,11 @@ impl Rtf {
         if self.state.skip || text.is_empty() {
             return;
         }
+        self.flush_surrogate();
+        self.push(text);
+    }
+
+    fn push(&mut self, text: &str) {
         let s = self.state;
         self.runs.push(Run::Text(Text::new(text, Fmt { b: s.b, i: s.i, u: s.u, s: s.s, sup: s.sup, sub: s.sub, href: None })));
     }
@@ -146,30 +151,28 @@ impl Rtf {
     /// \uN: Python keeps a lone surrogate in its string, and a pair of them
     /// becomes one character on its way to the page; here the pair is joined.
     fn add_unit(&mut self, unit: u16) {
+        if self.state.skip {
+            return;
+        }
         if (0xD800..0xDC00).contains(&unit) {
-            if self.high_surrogate.is_some() {
-                self.add("\u{FFFD}");
-            }
+            self.flush_surrogate();
             self.high_surrogate = Some(unit);
-            return;
-        }
-        if (0xDC00..0xE000).contains(&unit) {
-            if let Some(hi) = self.high_surrogate.take() {
-                let c = char::decode_utf16([hi, unit]).next().and_then(|r| r.ok()).unwrap_or('\u{FFFD}');
-                self.add(&c.to_string());
-            } else {
-                self.add("\u{FFFD}");
+        } else if (0xDC00..0xE000).contains(&unit) {
+            match self.high_surrogate.take() {
+                Some(hi) => {
+                    let c = char::decode_utf16([hi, unit]).next().and_then(|r| r.ok()).unwrap_or('\u{FFFD}');
+                    self.push(&c.to_string());
+                }
+                None => self.push("\u{FFFD}"),
             }
-            return;
+        } else {
+            self.add(&char::from_u32(unit as u32).unwrap_or('\u{FFFD}').to_string());
         }
-        self.flush_surrogate();
-        let c = char::from_u32(unit as u32).unwrap_or('\u{FFFD}');
-        self.add(&c.to_string());
     }
 
     fn flush_surrogate(&mut self) {
         if self.high_surrogate.take().is_some() {
-            self.add("\u{FFFD}");
+            self.push("\u{FFFD}");
         }
     }
 
@@ -183,6 +186,7 @@ impl Rtf {
 
     fn end_para(&mut self) {
         self.flush_bytes();
+        self.flush_surrogate();
         let runs = std::mem::take(&mut self.runs);
         let align = self.para.align.clone();
         let mut para = std::mem::take(&mut self.para);
@@ -238,18 +242,9 @@ pub fn read_rtf(data: &[u8]) -> Document {
             Tok::Sym(sym) => {
                 match sym {
                     b'*' => r.state.skip = true,
-                    b'\\' | b'{' | b'}' => {
-                        r.flush_surrogate();
-                        r.add(&(sym as char).to_string())
-                    }
-                    b'~' => {
-                        r.flush_surrogate();
-                        r.add("\u{a0}")
-                    }
-                    b'_' => {
-                        r.flush_surrogate();
-                        r.add("\u{2011}")
-                    }
+                    b'\\' | b'{' | b'}' => r.add(&(sym as char).to_string()),
+                    b'~' => r.add("\u{a0}"),
+                    b'_' => r.add("\u{2011}"),
                     b'\n' | b'\r' => r.end_para(),
                     _ => {}
                 }
@@ -274,9 +269,6 @@ pub fn read_rtf(data: &[u8]) -> Document {
                 }
                 group_start = false;
                 let on = num.is_none_or(|n| n.nonzero);
-                if w != "u" {
-                    r.flush_surrogate();
-                }
                 match w {
                     "ansicpg" => {
                         if let Some(n) = num.filter(|n| n.nonzero) {
@@ -384,7 +376,6 @@ pub fn read_rtf(data: &[u8]) -> Document {
             Tok::Newlines => {}
             Tok::Text(text) => {
                 group_start = false;
-                r.flush_surrogate();
                 let mut t: Vec<char> = decode_codepage(r.codepage, text).chars().collect();
                 if skip_chars != 0 {
                     // cut = min(skip_chars, len(t)); t = t[cut:]; skip_chars -= cut

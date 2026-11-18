@@ -120,3 +120,59 @@ fn same_as_python() {
     eprintln!("compared {checked} cases with leaflet_formats.py");
     assert!(failures.is_empty(), "{} differences:\n{}", failures.len(), failures.join("\n"));
 }
+
+/// Damaged files (bytes flipped, cut short) must give an error, never a panic.
+#[test]
+fn damaged_files_never_panic() {
+    let Ok(dir) = std::env::var("ORACLE_DIR") else { return };
+    let corpus = PathBuf::from(dir).join("corpus");
+    let mut seed: u64 = 0x2545_F491_4F6C_DD1D;
+    let mut next = move || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        seed
+    };
+    let mut tried = 0;
+    for entry in std::fs::read_dir(corpus).unwrap() {
+        let data = std::fs::read(entry.unwrap().path()).unwrap();
+        if data.is_empty() {
+            continue;
+        }
+        for round in 0..40 {
+            let mut d = data.clone();
+            if round % 4 == 0 {
+                d.truncate((next() as usize) % d.len());
+            } else {
+                for _ in 0..1 + round % 8 {
+                    let i = (next() as usize) % d.len();
+                    d[i] = next() as u8;
+                }
+            }
+            let _ = lf::detect(&d);
+            for kind in ["docx", "odt", "rtf", "txt"] {
+                if let Ok(doc) = lf::load(&d, kind) {
+                    let html = lf::to_html(&doc);
+                    let back = lf::from_html(&html);
+                    let _ = lf::save(&back, "docx");
+                    let _ = lf::save(&doc, "odt");
+                }
+            }
+            let _ = lf::strip_image_metadata(&d);
+            let _ = lf::images::image_size(&d);
+            tried += 1;
+        }
+    }
+    eprintln!("{tried} damaged files read without a panic");
+}
+
+#[test]
+fn odd_html_never_panics() {
+    for s in ["<", "</", "<a", "<a href", "<a href=", "<a href='", "&", "&#", "&#x", "&#99999999999999;", "&amp", "<p><b><i>x</p>",
+        "</p></div>", "<table><tr><td colspan=x>", "<img src=\"data:image/png;base64,\">", "<ul><ul><ul>", "<!--", "<!x", "<?x",
+        "<script>", "<style>a", "\u{0}", "<p style=\"text-align\">x</p>", "<li>a</li>"] {
+        let d = lf::from_html(s);
+        let _ = lf::save(&d, "docx");
+        let _ = lf::to_html(&d);
+    }
+}

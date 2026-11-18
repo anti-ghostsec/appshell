@@ -9,6 +9,7 @@
 
 pub mod docx_in;
 pub mod docx_out;
+pub mod entities;
 pub mod html_in;
 pub mod html_out;
 pub mod images;
