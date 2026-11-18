@@ -325,7 +325,7 @@ abstract class ShellActivity : ComponentActivity() {
       var check = function () { if (!done && !sb.hidden) { done = true; obs.disconnect(); b.click(); } };
       obs = new MutationObserver(check);
       obs.observe(sb, { attributes: true, attributeFilter: ['hidden'] });
-      setTimeout(function () { obs.disconnect(); }, 15000);
+      setTimeout(function () { obs.disconnect(); }, 120000);
     };
     var hook = setInterval(function () {
       var L = window.Leaflet;
