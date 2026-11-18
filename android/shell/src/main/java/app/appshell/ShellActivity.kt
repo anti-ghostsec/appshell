@@ -326,14 +326,21 @@ abstract class ShellActivity : ComponentActivity() {
       obs = new MutationObserver(check);
       obs.observe(sb, { attributes: true, attributeFilter: ['hidden'] });
       setTimeout(function () { obs.disconnect(); }, 120000);
+      check();
     };
-    var hook = setInterval(function () {
-      var L = window.Leaflet;
-      if (!L || typeof L.handle !== 'function') return;
-      clearInterval(hook);
-      var handle = L.handle.bind(L);
-      L.handle = function (m) { if (m && m.what === 'load') closeListSoon(); return handle(m); };
-    }, 20);
+    var wrap = function (L) {
+      if (L && typeof L.handle === 'function') {
+        var handle = L.handle.bind(L);
+        L.handle = function (m) { if (m && m.what === 'load') closeListSoon(); return handle(m); };
+      }
+      return L;
+    };
+    // Catch the page's window.Leaflet as it's made, before the first message can arrive.
+    Object.defineProperty(window, 'Leaflet', {
+      configurable: true,
+      get: function () { return undefined; },
+      set: function (v) { Object.defineProperty(window, 'Leaflet', { value: wrap(v), writable: true, configurable: true, enumerable: true }); },
+    });
   }
 })();"""
 
