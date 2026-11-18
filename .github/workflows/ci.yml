@@ -1,0 +1,24 @@
+name: CI
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  formats:
+    name: Formats (against Leaflet's Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Leaflet at the pinned commit
+        run: |
+          git clone -q https://github.com/anti-ghostsec/leaflet build/leaflet
+          git -C build/leaflet checkout -q "$(tr -d ' \n' < apps/leaflet.commit)"
+      - name: What the Python makes of the corpus
+        run: python3 tools/formats_oracle.py build/leaflet build/oracle
+      - name: Rust tests and the comparison
+        run: cargo test -p leaflet-formats --locked
+        env:
+          ORACLE_DIR: ${{ github.workspace }}/build/oracle

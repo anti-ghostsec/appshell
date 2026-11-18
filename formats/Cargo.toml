@@ -1,0 +1,15 @@
+[package]
+name = "leaflet-formats"
+description = "Leaflet's documents: DOCX, ODT, RTF and text, to and from the editor's HTML"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+roxmltree = "0.20"
+miniz_oxide = "0.8"
+encoding_rs = "0.8"
+
+[dev-dependencies]
+serde_json = "1"
