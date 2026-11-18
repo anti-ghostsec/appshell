@@ -1,0 +1,24 @@
+/* Folio on Android: bigger touch targets, and room for a phone's width.
+   Loaded by the Android shell only; the Linux and Windows apps never see it. */
+html.appshell-android .icon { width: 40px; height: 40px; }
+html.appshell-android .icon svg { width: 18px; height: 18px; }
+html.appshell-android .text-btn { height: 40px; padding: 0 12px; }
+html.appshell-android #tabbar { padding: 4px 6px; gap: 0; }
+html.appshell-android .tab { height: 38px; max-width: 60vw; }
+html.appshell-android .tab .close { width: 30px; height: 30px; }
+html.appshell-android .tab .close svg { opacity: 1; }
+html.appshell-android .menu button { padding: 12px 14px; }
+html.appshell-android .status-btn { padding: 8px 10px; }
+html.appshell-android .scroller::-webkit-scrollbar { width: 4px; height: 4px; }
+html.appshell-android .scroller::-webkit-scrollbar-thumb { border: 0; }
+
+@media (max-width: 720px) {
+  html.appshell-android .page { padding: 20px 16px 45vh; }
+  html.appshell-android .doc.code .stack { padding-right: 12px; }
+  html.appshell-android .panel { left: 6px; right: 6px; top: 52px; width: auto; max-height: calc(100vh - 64px); }
+  html.appshell-android .menu { max-width: calc(100vw - 12px); }
+  html.appshell-android #findbar .findrow { flex-wrap: wrap; }
+  html.appshell-android #findbar .field { flex: 1 1 100%; }
+  html.appshell-android #status { font-size: 11px; }
+  html.appshell-android #stEol { display: none; }
+}

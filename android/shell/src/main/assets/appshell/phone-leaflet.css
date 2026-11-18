@@ -1,0 +1,25 @@
+/* Leaflet on Android: bigger touch targets, a page list that floats over
+   the page on a phone, and documents that fit the screen's width.
+   Loaded by the Android shell only; the Linux and Windows apps never see it. */
+html.appshell-android #toolbar button { min-width: 42px; height: 42px; }
+html.appshell-android #toolbar select { height: 38px; }
+html.appshell-android .popup button { height: 44px !important; }
+html.appshell-android .popup .kbd { display: none; }
+html.appshell-android .dialog { min-width: 0; max-width: calc(100vw - 24px); }
+html.appshell-android .dialog .buttons button { height: 40px; }
+html.appshell-android #welcome button { height: 44px; }
+html.appshell-android #recent li button { padding: 10px 8px; }
+html.appshell-android .card .hint { display: none; }
+
+@media (max-width: 720px) {
+  html.appshell-android #main { position: relative; }
+  html.appshell-android #sidebar {
+    position: absolute; z-index: 15; top: 0; bottom: 0; left: 0; width: 150px;
+    box-shadow: 4px 0 16px rgba(0, 0, 0, .25);
+  }
+  html.appshell-android .thumb { width: 110px; }
+  html.appshell-android #doc-scroll { padding: 8px 0 32px; }
+  html.appshell-android #doc { width: auto; min-height: 0; padding: 18px 16px; box-shadow: none; }
+  html.appshell-android #doc hr.page-break { margin: 18pt -16px; }
+  html.appshell-android #status { font-size: 11px; }
+}
