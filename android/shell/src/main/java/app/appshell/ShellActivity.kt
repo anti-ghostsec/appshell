@@ -286,7 +286,8 @@ abstract class ShellActivity : ComponentActivity() {
                 fun postMessage(m: String) = runOnUiThread { onString(m) }
             }, "__appshell")
         }
-        startScript = Native.script(app, buffers && WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) + "\n" + PHONE + "\n" + testScript()
+        startScript = polyfills + "\n" + Native.script(app, buffers && WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) +
+            "\n" + PHONE + "\n" + testScript()
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             WebViewCompat.addDocumentStartJavaScript(w, startScript, setOf(ORIGIN))
             startScript = ""
@@ -297,6 +298,8 @@ abstract class ShellActivity : ComponentActivity() {
         applyBackground(bg.optString("color", "#ffffff"), bg.optBoolean("dark"))
         w.loadUrl(INDEX)
     }
+
+    private val polyfills by lazy { assets.open("appshell/polyfills.js").use { String(it.readBytes()) } }
 
     /** The phone stylesheet: bigger touch targets and narrow-screen layouts (assets/appshell). */
     private val PHONE = """(function () {
@@ -369,6 +372,14 @@ abstract class ShellActivity : ComponentActivity() {
         }
         if (path == "/__appshell/phone.css") return asset("appshell/phone-$app.css", "text/css")
         val rel = uiPath(path) ?: return response("text/plain", ByteArray(0), 404)
+        if (rel.contains(".worker.") && (rel.endsWith(".mjs") || rel.endsWith(".js"))) {
+            // PDF.js's worker gets the same fallbacks as the page (see assets/appshell/polyfills.js)
+            return try {
+                response(mime(rel), (polyfills + "\n").toByteArray() + assets.open("ui/$rel").use { it.readBytes() })
+            } catch (e: Exception) {
+                response("text/plain", ByteArray(0), 404)
+            }
+        }
         return asset("ui/$rel", mime(rel))
     }
 
