@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   formats:
-    name: Formats (against Leaflet's Python)
+    name: Formats and core (formats against Leaflet's Python)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,6 +19,6 @@ jobs:
       - name: What the Python makes of the corpus
         run: python3 tools/formats_oracle.py build/leaflet build/oracle
       - name: Rust tests and the comparison
-        run: cargo test -p leaflet-formats --locked
+        run: cargo test -p leaflet-formats -p appshell-core --locked
         env:
           ORACLE_DIR: ${{ github.workspace }}/build/oracle
