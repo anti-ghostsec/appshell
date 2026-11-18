@@ -15,7 +15,7 @@ jobs:
       - name: Leaflet at the pinned commit
         run: |
           git clone -q https://github.com/anti-ghostsec/leaflet build/leaflet
-          git -C build/leaflet checkout -q "$(tr -d ' \n' < apps/leaflet.commit)"
+          git -C build/leaflet checkout -q "$(tr -d '[:space:]' < apps/leaflet.commit)"
       - name: What the Python makes of the corpus
         run: python3 tools/formats_oracle.py build/leaflet build/oracle
       - name: Rust tests and the comparison
@@ -38,7 +38,7 @@ jobs:
         run: |
           for app in folio leaflet; do
             git clone -q https://github.com/anti-ghostsec/$app build/$app
-            git -C build/$app checkout -q "$(tr -d ' \n' < apps/$app.commit)"
+            git -C build/$app checkout -q "$(tr -d '[:space:]' < apps/$app.commit)"
           done
       - uses: actions/cache@v4
         with:

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["formats", "core", "windows"]
+members = ["formats", "core", "windows", "android/ffi"]
 
 [workspace.package]
 version = "0.1.0"

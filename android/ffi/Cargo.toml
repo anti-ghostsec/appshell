@@ -1,0 +1,17 @@
+[package]
+name = "appshell-android"
+description = "appshell-core for the Android shell, over JNI"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "appshell"
+crate-type = ["cdylib"]
+
+[dependencies]
+appshell-core = { path = "../../core" }
+leaflet-formats = { path = "../../formats" }
+serde_json = "1"
+jni = "0.21"
