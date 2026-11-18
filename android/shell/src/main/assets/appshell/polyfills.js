@@ -62,6 +62,18 @@
     for (var i = 0; i < this.length; i++) s += (this[i] < 16 ? '0' : '') + this[i].toString(16);
     return s;
   });
+  if (g.URL) {
+    def(URL, 'parse', function (u, base) { try { return new URL(u, base); } catch (e) { return null; } });
+    def(URL, 'canParse', function (u, base) { try { new URL(u, base); return true; } catch (e) { return false; } });
+  }
+  if (g.AbortSignal && g.AbortController) def(AbortSignal, 'any', function (signals) {
+    var c = new AbortController();
+    for (var s of signals) {
+      if (s.aborted) { c.abort(s.reason); return c.signal; }
+      s.addEventListener('abort', function () { if (!c.signal.aborted) c.abort(this.reason); }, { once: true });
+    }
+    return c.signal;
+  });
   // Iterator: the global itself, and the helpers.
   var P = Object.getPrototypeOf(Object.getPrototypeOf([][Symbol.iterator]()));
   if (typeof g.Iterator !== 'function') {
