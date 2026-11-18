@@ -22,7 +22,12 @@
     run: function (name, body) {
       window.addEventListener('load', function () {
         body().then(
-          function (r) { window.__appshellReport(Object.assign({ ok: true, test: name, errors: errors }, r || {})); },
+          async function (r) {
+            // let the window settle (fonts, the last render) so a screenshot shows it as a person would see it
+            try { await document.fonts.ready; } catch (e) {}
+            await new Promise(function (res) { setTimeout(res, 800); });
+            window.__appshellReport(Object.assign({ ok: true, test: name, errors: errors }, r || {}));
+          },
           function (e) {
             var state = null;
             try { state = window.__t.state(); } catch (x) { state = 'state: ' + x; }

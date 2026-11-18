@@ -302,8 +302,13 @@ abstract class ShellActivity : ComponentActivity() {
 
     private val polyfills by lazy { assets.open("appshell/polyfills.js").use { String(it.readBytes()) } }
 
-    /** The phone stylesheet: bigger touch targets and narrow-screen layouts (assets/appshell). */
-    private val PHONE = """(function () {
+    /**
+     * The phone stylesheet (bigger touch targets, narrow-screen layouts:
+     * assets/appshell), and for Leaflet: on a narrow screen the page list
+     * starts closed, as it would cover the page. It's closed with the app's
+     * own button, so the button goes on working as it does everywhere.
+     */
+    private val PHONE get() = """(function () {
   function add() {
     document.documentElement.classList.add('appshell-android');
     var l = document.createElement('link');
@@ -312,6 +317,24 @@ abstract class ShellActivity : ComponentActivity() {
     document.head.appendChild(l);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', add); else add();
+  if (${if (app == "leaflet") "true" else "false"}) {
+    var closeListSoon = function () {
+      var sb = document.getElementById('sidebar'), b = document.querySelector('[data-cmd="sidebar"]');
+      if (!sb || !b || window.innerWidth >= 720) return;
+      var done = false, obs;
+      var check = function () { if (!done && !sb.hidden) { done = true; obs.disconnect(); b.click(); } };
+      obs = new MutationObserver(check);
+      obs.observe(sb, { attributes: true, attributeFilter: ['hidden'] });
+      setTimeout(function () { obs.disconnect(); }, 15000);
+    };
+    var hook = setInterval(function () {
+      var L = window.Leaflet;
+      if (!L || typeof L.handle !== 'function') return;
+      clearInterval(hook);
+      var handle = L.handle.bind(L);
+      L.handle = function (m) { if (m && m.what === 'load') closeListSoon(); return handle(m); };
+    }, 20);
+  }
 })();"""
 
     private fun testScript(): String {
