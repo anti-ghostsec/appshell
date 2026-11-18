@@ -26,7 +26,7 @@ class FolioTest {
         StrictMode.setVmPolicy(StrictMode.VmPolicy.Builder().build())
         val ctx = inst.targetContext
         val dir = File(ctx.filesDir, "selftest").apply { deleteRecursively(); mkdirs() }
-        val file = File(dir, "sample.txt").apply { writeText("hello from the test\n") }
+        val file = File(dir, "note.txt").apply { writeText("hello from the test\n") }
         ShellActivity.resetTest()
         ctx.startActivity(
             Intent(Intent.ACTION_VIEW, Uri.fromFile(file)).setClassName(ctx, "app.folio.FolioActivity")

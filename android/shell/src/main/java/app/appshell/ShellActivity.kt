@@ -121,7 +121,7 @@ abstract class ShellActivity : ComponentActivity() {
         }
     }
 
-    private fun req(vararg kv: Pair<String, Any?>): String {
+    private fun msg(vararg kv: Pair<String, Any?>): String {
         val o = JSONObject()
         for ((k, v) in kv) o.put(k, v ?: JSONObject.NULL)
         return o.toString()
@@ -153,16 +153,16 @@ abstract class ShellActivity : ComponentActivity() {
         if (app == "folio") {
             Cores.drop() // each Folio window starts over: no tokens, no state from before
             core = Cores.get(this, app, files)
-            perform(Native.call(core, req("op" to "start")))
+            perform(Native.call(core, msg("op" to "start")))
         } else {
             core = Cores.get(this, app, emptyList())
             val given = intent.getIntExtra(EXTRA_WIN, -1)
             if (given >= 0) {
                 adopt(given)
             } else if (files.isEmpty()) {
-                perform(Native.call(core, req("op" to "activate")))
+                perform(Native.call(core, msg("op" to "activate")))
             } else {
-                perform(Native.call(core, req("op" to "start", "files" to JSONArray(files))))
+                perform(Native.call(core, msg("op" to "start", "files" to JSONArray(files))))
             }
         }
     }
@@ -170,7 +170,7 @@ abstract class ShellActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         val files = filesOf(intent)
-        if (files.isNotEmpty()) perform(Native.call(core, req("op" to "openFiles", "win" to win, "files" to JSONArray(files))))
+        if (files.isNotEmpty()) perform(Native.call(core, msg("op" to "openFiles", "win" to win, "files" to JSONArray(files))))
     }
 
     /** What another app opened or shared with this one. */
@@ -202,7 +202,7 @@ abstract class ShellActivity : ComponentActivity() {
             finishAndRemoveTask()
             return
         }
-        perform(Native.call(core, req("op" to "closeRequested", "win" to win)))
+        perform(Native.call(core, msg("op" to "closeRequested", "win" to win)))
     }
 
     private fun closeNow() {
@@ -211,7 +211,7 @@ abstract class ShellActivity : ComponentActivity() {
 
     override fun onDestroy() {
         if (isFinishing && win >= 0) {
-            Native.call(core, req("op" to "closed", "win" to win))
+            Native.call(core, msg("op" to "closed", "win" to win))
             Cores.unbind(win)
             if (app == "folio") Cores.drop()
         }
@@ -293,7 +293,7 @@ abstract class ShellActivity : ComponentActivity() {
         }
         web = w
         root.addView(w, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        val bg = JSONObject(Native.call(core, req("op" to "background")))
+        val bg = JSONObject(Native.call(core, msg("op" to "background")))
         applyBackground(bg.optString("color", "#ffffff"), bg.optBoolean("dark"))
         w.loadUrl(INDEX)
     }
@@ -330,7 +330,7 @@ abstract class ShellActivity : ComponentActivity() {
             else pendingPut = id to type
             return
         }
-        perform(Native.call(core, req("op" to "message", "win" to win, "msg" to s)))
+        perform(Native.call(core, msg("op" to "message", "win" to win, "msg" to s)))
     }
 
     private fun onBuffer(data: ByteArray) {
@@ -378,7 +378,7 @@ abstract class ShellActivity : ComponentActivity() {
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
             val url = request.url.toString()
             if (url.substringBefore('#').substringBefore('?') == INDEX) return false
-            perform(Native.call(core, req("op" to "navigation", "win" to win, "url" to url, "user" to request.hasGesture())))
+            perform(Native.call(core, msg("op" to "navigation", "win" to win, "url" to url, "user" to request.hasGesture())))
             return true
         }
 
@@ -393,7 +393,7 @@ abstract class ShellActivity : ComponentActivity() {
             root.removeView(view)
             view.destroy()
             web = null
-            perform(Native.call(core, req("op" to "crashed", "win" to win)))
+            perform(Native.call(core, msg("op" to "crashed", "win" to win)))
             return true
         }
     }
@@ -471,7 +471,7 @@ abstract class ShellActivity : ComponentActivity() {
         if (js == "folio.requestClose()") {
             // If the page can't ask, it mustn't trap the user: close anyway.
             w.evaluateJavascript("(function () { try { folio.requestClose(); return 'ok'; } catch (e) { return 'fail'; } })()") { r ->
-                if (r == null || !r.contains("ok")) perform(Native.call(core, req("op" to "forceClose", "win" to win)))
+                if (r == null || !r.contains("ok")) perform(Native.call(core, msg("op" to "forceClose", "win" to win)))
             }
             return
         }
@@ -479,7 +479,7 @@ abstract class ShellActivity : ComponentActivity() {
     }
 
     private fun answer(req: Int, value: Any?) {
-        perform(Native.call(core, req("op" to "result", "req" to req, "value" to (value ?: JSONObject.NULL))))
+        perform(Native.call(core, msg("op" to "result", "req" to req, "value" to (value ?: JSONObject.NULL))))
     }
 
     private fun mimesOf(a: JSONObject): Array<String> {

@@ -51,14 +51,14 @@ jobs:
       - name: Test files
         run: |
           mkdir -p build/t/out
-          printf 'hello from the test\n' > build/t/sample.txt
+          printf 'hello from the test\n' > build/t/note.txt
           python build/leaflet/tests/fixtures.py build/t > /dev/null
       - name: Folio opens a file and saves an edit
         run: |
           export APPSHELL_TEST_SCRIPT="$PWD/tools/selftest/folio.js" APPSHELL_TEST_OUT="$PWD/build/t/folio.json"
-          timeout 180 target/release/folio.exe "$(cygpath -w build/t/sample.txt)" || { cat build/t/folio.json; exit 1; }
+          timeout 180 target/release/folio.exe "$(cygpath -w build/t/note.txt)" || { cat build/t/folio.json; exit 1; }
           cat build/t/folio.json; echo
-          grep -q 'edited by the test' build/t/sample.txt
+          grep -q 'edited by the test' build/t/note.txt
       - name: Leaflet edits and saves a .docx, and exports it as a PDF
         if: success() || failure()
         run: |
