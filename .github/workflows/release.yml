@@ -116,7 +116,7 @@ jobs:
               exit 1
             fi
             # Signed with the release key, not some other one.
-            got=$(sed -n 's/^Signer[^:]*certificate SHA-256 digest: //p' certs.txt | head -1)
+            got=$(sed -n 's/^Signer.*certificate SHA-256 digest: //p' certs.txt | head -1)
             if [ "$got" != "$(tr -d '[:space:]' < android/release-cert.sha256)" ]; then
               echo "::error::$apk is signed with $got, not the release key in android/release-cert.sha256"
               exit 1
