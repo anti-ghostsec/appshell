@@ -25,12 +25,26 @@ android {
     sourceSets["main"].assets.srcDir(layout.buildDirectory.dir("generated/ui"))
     // The self-test scripts and test files (CI puts them here; see .github/workflows/ci.yml)
     sourceSets["androidTest"].assets.srcDir(System.getenv("APPSHELL_TEST_ASSETS") ?: "../../build/android-test-assets")
+    // The release key: a keystore the release workflow writes from the
+    // repository's secrets (see .github/workflows/release.yml). It never goes
+    // in the repository. Without it, release builds (the CI's test builds, a
+    // local build) are signed with the debug key, and release.yml refuses to
+    // publish those.
+    val releaseKeystore = System.getenv("APPSHELL_KEYSTORE")?.takeIf { it.isNotBlank() }
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = System.getenv("APPSHELL_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("APPSHELL_KEY_ALIAS")
+                keyPassword = System.getenv("APPSHELL_KEY_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled = false
-            // Signed with the debug key until there is a release key; that one is
-            // yours to make and keep, and never goes in the repository.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (releaseKeystore != null) "release" else "debug")
         }
     }
     compileOptions {

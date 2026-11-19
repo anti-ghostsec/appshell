@@ -69,13 +69,17 @@ cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 --platform 26 -o android/shell/s
 APPSHELL_FOLIO_UI=$PWD/build/folio/ui APPSHELL_LEAFLET_UI=$PWD/build/leaflet/ui gradle -p android assembleRelease
 ```
 
-The APKs are signed with Android's debug key until there is a release key; that key is the
-maintainer's to make and keep, and never goes in this repository.
+A local build like this signs the APKs with Android's debug key. Releases are signed with the release
+key: `release.yml` writes it from the repository's secrets (listed at the top of that file) and refuses
+to publish without it, or with APKs signed by a debug key. The key is the maintainer's to make and keep,
+and never goes in this repository. To sign a local build with it, set `APPSHELL_KEYSTORE` (its path),
+`APPSHELL_KEYSTORE_PASSWORD`, `APPSHELL_KEY_ALIAS` and `APPSHELL_KEY_PASSWORD`.
 
 ## Testing
 
 - `formats`: unit tests, the comparison with `leaflet_formats.py` on Leaflet's own fixtures plus extra
-  documents (`tools/formats_oracle.py`), and damaged copies of all of them, which must never panic.
+  documents (`tools/formats_oracle.py`), and damaged copies of all of them, which must never panic;
+  files nested thousands of levels deep are refused with an error instead of overflowing the stack.
 - `core`: the page-may-not tests of both Linux apps (paths aren't tokens, a closed document can't be
   written, export goes where the ticket says, links only after a yes, ...).
 - Windows and Android: the real apps on CI, driven through their pages by `tools/selftest/*.js`: Folio

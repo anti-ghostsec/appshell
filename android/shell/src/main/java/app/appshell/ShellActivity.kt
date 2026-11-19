@@ -189,7 +189,11 @@ abstract class ShellActivity : ComponentActivity() {
                 intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)?.forEach { out.add(it.toString()) }
             }
         }
-        return out.filter { it.startsWith("content:") || it.startsWith("file:") }
+        // Only content:// URIs. Any app can send this activity an intent, and a
+        // file:// path could name this app's own private files to open and
+        // overwrite. Debug builds also take file:// for the instrumented tests.
+        val tests = debuggable && intent.hasExtra(EXTRA_TEST_SCRIPT)
+        return out.filter { val s = Uri.parse(it).scheme; s == "content" || (tests && s == "file") }
     }
 
     private fun adopt(w: Int) {

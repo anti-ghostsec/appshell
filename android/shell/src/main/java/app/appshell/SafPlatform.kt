@@ -1,6 +1,7 @@
 package app.appshell
 
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.content.res.Configuration
 import android.net.Uri
 import android.provider.DocumentsContract
@@ -18,7 +19,22 @@ class SafPlatform(private val context: Context, private val app: String) {
     private val resolver get() = context.contentResolver
     @Volatile private var error = ""
 
-    private fun uri(h: String): Uri = Uri.parse(h)
+    /** Debug builds only: the instrumented tests hand over file:// paths in the app's own folder. */
+    private val debuggable = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
+    /** Only content:// URIs; a file:// path could point into this app's own private files. */
+    private fun uri(h: String): Uri {
+        val u = Uri.parse(h)
+        if (u.scheme == "content" || (debuggable && u.scheme == "file")) return u
+        throw SecurityException("not a file this app was given")
+    }
+
+    private fun usable(h: String): Boolean = try {
+        uri(h)
+        true
+    } catch (e: SecurityException) {
+        false
+    }
 
     /** Called from Rust when read() returned null. */
     fun lastError(@Suppress("UNUSED_PARAMETER") unused: String): String = error
@@ -65,6 +81,7 @@ class SafPlatform(private val context: Context, private val app: String) {
 
     /** null when written; otherwise what went wrong. */
     fun write(h: String, data: ByteArray): String? {
+        if (!usable(h)) return "not a file this app was given"
         return try {
             val out = try {
                 resolver.openOutputStream(uri(h), "wt")
@@ -87,6 +104,7 @@ class SafPlatform(private val context: Context, private val app: String) {
     private fun sizeOf(h: String): Long? = query(h, OpenableColumns.SIZE) { c, i -> if (c.isNull(i)) null else c.getLong(i) }
 
     private fun <T> query(h: String, column: String, get: (android.database.Cursor, Int) -> T?): T? {
+        if (!usable(h)) return null
         val u = uri(h)
         if (u.scheme == "file") {
             val f = File(u.path ?: return null)
@@ -115,10 +133,11 @@ class SafPlatform(private val context: Context, private val app: String) {
     fun exists(h: String): Boolean = query(h, OpenableColumns.DISPLAY_NAME) { c, i -> c.getString(i) } != null
 
     fun name(h: String): String =
-        query(h, OpenableColumns.DISPLAY_NAME) { c, i -> c.getString(i) } ?: (uri(h).lastPathSegment ?: "document").substringAfterLast('/')
+        query(h, OpenableColumns.DISPLAY_NAME) { c, i -> c.getString(i) } ?: (Uri.parse(h).lastPathSegment ?: "document").substringAfterLast('/')
 
     /** Where it is, when the provider says: "Documents" for primary:Documents/notes.txt. */
     fun folder(h: String): String {
+        if (!usable(h)) return ""
         val u = uri(h)
         if (u.scheme == "file") return File(u.path ?: "").parent ?: ""
         return try {

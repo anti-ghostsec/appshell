@@ -6,6 +6,7 @@ use crate::text::{cp1252, latin1, utf16};
 use crate::FormatError;
 
 pub const DOCTYPE_REFUSED: &str = "the document contains a DOCTYPE, which Leaflet refuses to read";
+pub const TOO_DEEP: &str = "the document is nested too deeply to read";
 
 #[derive(Debug, Clone, Default)]
 pub struct Element {
@@ -182,12 +183,70 @@ pub fn parse(data: &[u8]) -> Result<Element, FormatError> {
         return Err(FormatError::new(DOCTYPE_REFUSED));
     }
     let text = decode(data)?;
+    let text = without_declaration(&text);
+    check_depth(text)?;
     let opts = roxmltree::ParsingOptions { allow_dtd: false, ..Default::default() };
-    let doc = roxmltree::Document::parse_with_options(without_declaration(&text), opts).map_err(|e| match e {
+    let doc = roxmltree::Document::parse_with_options(text, opts).map_err(|e| match e {
         roxmltree::Error::DtdDetected => FormatError::new(DOCTYPE_REFUSED),
         e => broken(e),
     })?;
     Ok(convert(doc.root_element()))
+}
+
+/// Refuse anything nested deeper than MAX_DEPTH. roxmltree, the conversion
+/// below and the readers after it all recurse once per level, so this looks
+/// at the text before any of them: a tiny file nested thousands of levels
+/// deep would otherwise overflow the stack. It errs on the side of counting
+/// deeper; text that isn't well-formed fails in roxmltree anyway.
+fn check_depth(text: &str) -> Result<(), FormatError> {
+    let b = text.as_bytes();
+    let skip_past = |from: usize, end: &[u8]| b[from..].windows(end.len()).position(|w| w == end).map_or(b.len(), |p| from + p + end.len());
+    let mut depth = 0usize;
+    let mut i = 0;
+    while let Some(p) = b[i..].iter().position(|&c| c == b'<') {
+        i += p;
+        let rest = &b[i..];
+        if rest.starts_with(b"<!--") {
+            i = skip_past(i + 4, b"-->");
+        } else if rest.starts_with(b"<![CDATA[") {
+            i = skip_past(i + 9, b"]]>");
+        } else if rest.starts_with(b"<?") {
+            i = skip_past(i + 2, b"?>");
+        } else if rest.starts_with(b"</") {
+            depth = depth.saturating_sub(1);
+            i = skip_past(i + 2, b">");
+        } else if rest.starts_with(b"<!") {
+            i = skip_past(i + 2, b">");
+        } else {
+            // a start tag: find its end, past quoted attribute values
+            let mut j = i + 1;
+            let mut quote = 0u8;
+            while j < b.len() {
+                let c = b[j];
+                if quote != 0 {
+                    if c == quote {
+                        quote = 0;
+                    }
+                } else if c == b'"' || c == b'\'' {
+                    quote = c;
+                } else if c == b'>' {
+                    break;
+                }
+                j += 1;
+            }
+            if !(j < b.len() && b[j - 1] == b'/') {
+                depth += 1;
+                if depth > crate::MAX_DEPTH {
+                    return Err(FormatError::new(TOO_DEEP));
+                }
+            }
+            i = j + 1;
+        }
+        if i >= b.len() {
+            break;
+        }
+    }
+    Ok(())
 }
 
 fn name_of(ns: Option<&str>, local: &str) -> String {

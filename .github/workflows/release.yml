@@ -1,6 +1,13 @@
 name: Release
 # A v* tag builds Folio and Leaflet for Windows and Android and puts them on a
 # GitHub release. Only the newest two releases are kept.
+#
+# The APKs are signed with the release key, from these repository secrets
+# (Settings > Secrets and variables > Actions); without them the release fails:
+#   ANDROID_KEYSTORE_BASE64    the keystore file, base64 on one line
+#   ANDROID_KEYSTORE_PASSWORD  the keystore's password
+#   ANDROID_KEY_ALIAS          the key's alias in it
+#   ANDROID_KEY_PASSWORD       the key's password (for a PKCS12 keystore, the same as the keystore's)
 on:
   push:
     tags: ["v*"]
@@ -38,6 +45,8 @@ jobs:
 
   android:
     runs-on: ubuntu-latest
+    outputs:
+      cert: ${{ steps.apks.outputs.cert }}
     env:
       APPSHELL_FOLIO_UI: ${{ github.workspace }}/build/folio/ui
       APPSHELL_LEAFLET_UI: ${{ github.workspace }}/build/leaflet/ui
@@ -63,12 +72,49 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
-      - run: gradle -p android --no-daemon assembleRelease
-      - name: APKs
+      - name: Release key
+        # The same key every release, from the repository's secrets, so a new
+        # version installs over the old one and no one else can make an update
+        # Android accepts. No key, no release.
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
+          missing=""
+          for v in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            [ -n "${!v}" ] || missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::The release key's secrets are missing:$missing. See the comment at the top of release.yml."
+            exit 1
+          fi
+          ks="$RUNNER_TEMP/release.keystore"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$ks"
+          echo "APPSHELL_KEYSTORE=$ks" >> "$GITHUB_ENV"
+      - run: gradle -p android --no-daemon assembleRelease
+        env:
+          APPSHELL_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          APPSHELL_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          APPSHELL_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      - name: APKs
+        id: apks
+        run: |
+          rm -f "$APPSHELL_KEYSTORE"
           mkdir -p dist
           cp android/folio/build/outputs/apk/release/*.apk dist/folio-android.apk
           cp android/leaflet/build/outputs/apk/release/*.apk dist/leaflet-android.apk
+          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
+          for apk in dist/*.apk; do
+            "$apksigner" verify --print-certs "$apk" > certs.txt
+            cat certs.txt
+            if grep -q 'CN=Android Debug' certs.txt; then
+              echo "::error::$apk is signed with a debug key"
+              exit 1
+            fi
+          done
+          echo "cert=$(grep -m1 'certificate SHA-256 digest' certs.txt | sed 's/.*: //')" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
           name: android
@@ -87,9 +133,10 @@ jobs:
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
+          CERT: ${{ needs.android.outputs.cert }}
         run: |
           gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" \
-            --notes "Folio and Leaflet for Windows (x64, needs the WebView2 Runtime that comes with Windows 10 and 11) and Android 8 and later. The APKs are signed with a test key for now."
+            --notes "Folio and Leaflet for Windows (x64, needs the WebView2 Runtime that comes with Windows 10 and 11) and Android 8 and later. The APKs are signed with the release key whose SHA-256 certificate fingerprint is $CERT; the Windows programs aren't code-signed yet."
           # keep the newest two releases
           gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName,createdAt -q 'sort_by(.createdAt) | reverse | .[2:] | .[].tagName' |
             while read -r old; do gh release delete "$old" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag; done

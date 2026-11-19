@@ -31,6 +31,10 @@ pub const MAX_MEMBER: usize = 64 * 1024 * 1024;
 pub const MAX_TOTAL: usize = 256 * 1024 * 1024;
 pub const MAX_IMAGE: usize = 32 * 1024 * 1024;
 pub const EMU_PER_PX: i64 = 9525;
+/// How deeply elements may nest. The readers recurse, so a tiny file nested
+/// thousands of levels deep would overflow the stack and take the app down.
+/// Real documents stay far below this, even with tables inside tables.
+pub const MAX_DEPTH: usize = 256;
 
 /// The file can't be read as the format it claims to be.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -8,7 +8,7 @@
 use crate::images::sniff_image;
 use crate::model::*;
 use crate::text::{b64decode, is_web_link, py_int};
-use crate::MAX_IMAGE;
+use crate::{MAX_DEPTH, MAX_IMAGE};
 
 #[derive(Debug)]
 enum Child {
@@ -22,6 +22,7 @@ struct Node {
     attrs: Vec<(String, Option<String>)>,
     children: Vec<Child>,
     parent: Option<usize>,
+    depth: usize,
 }
 
 impl Node {
@@ -141,7 +142,7 @@ fn charref(s: &str) -> Option<(String, usize)> {
 // ------------------------------------------------------------ parsing
 
 fn parse(source: &str) -> Tree {
-    let mut tree = Tree { nodes: vec![Node { tag: "root".into(), attrs: vec![], children: vec![], parent: None }] };
+    let mut tree = Tree { nodes: vec![Node { tag: "root".into(), attrs: vec![], children: vec![], parent: None, depth: 0 }] };
     let mut cur = 0usize;
     let s = source;
     let b = s.as_bytes();
@@ -207,7 +208,8 @@ fn parse(source: &str) -> Tree {
         let (tag, attrs, self_closing, used) = start_tag(rest);
         i += used;
         let idx = tree.nodes.len();
-        tree.nodes.push(Node { tag: tag.clone(), attrs, children: vec![], parent: Some(cur) });
+        let depth = tree.nodes[cur].depth + 1;
+        tree.nodes.push(Node { tag: tag.clone(), attrs, children: vec![], parent: Some(cur), depth });
         tree.nodes[cur].children.push(Child::Node(idx));
         if self_closing {
             continue;
@@ -226,7 +228,9 @@ fn parse(source: &str) -> Tree {
             }
             continue;
         }
-        if !VOID.contains(&tag.as_str()) {
+        // Past MAX_DEPTH an element stays empty and what was inside it follows
+        // it instead, so the recursive reading below can't overflow the stack.
+        if !VOID.contains(&tag.as_str()) && depth < MAX_DEPTH {
             cur = idx;
         }
     }

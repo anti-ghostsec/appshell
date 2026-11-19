@@ -14,3 +14,9 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
